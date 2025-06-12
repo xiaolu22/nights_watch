@@ -72,16 +72,6 @@ class WebSocketClient:
         if self.websocket:
             await self.websocket.close_connection()
         logger.info("WebSocket已关闭")
-        # while True:
-        #     message = await self.binance_socket_manager
-        #     data = json.loads(message)
-        #     logger.info(f"收到消息: {data}")
-        #     return data
-
-    # async def send_message(self, message):
-    #     await self.websocket.send(json.dumps(message))
-    #     logger.info(f"发送消息: {message}")
-
 
 class UserDataClient:
     def __init__(self, api_key, api_secret):

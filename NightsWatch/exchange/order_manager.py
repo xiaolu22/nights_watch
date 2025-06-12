@@ -9,7 +9,6 @@ from binance.enums import SIDE_BUY, SIDE_SELL, ORDER_TYPE_LIMIT, ORDER_TYPE_MARK
 from enum import Enum
 import random
 import time
-# from binance.enums import TIME_IN_FORCE_GTC
 
 
 
@@ -99,15 +98,13 @@ class OrderManager:
                 time_delta = server_time['serverTime'] - local_time
                 
                 # Apply time delta to client configuration
-        
                 self.sub_client.time_offset = time_delta
 
             else:
                 logger.warning('未配置副账户API密钥，跟单功能不可用')
         except Exception as e:
             logger.error(f"初始化副账户失败: {str(e)}")
-    # def __init__(self, ws_client):
-    #     self.ws_client = ws_client
+
 
     async def compensate_consumer(self):
         while True:
@@ -278,8 +275,6 @@ class OrderManager:
                         order_type = msg['o']['ot']
                         side = msg['o']['S']
                         logger.info(f"FILLED-收到主账户订单完全成交: ID={order_id}, 状态={msg['o']['X']}, 数量={quantity}, 价格={price}, 时间={msg['o']['T']}, 类型={order_type}, 方向={side}")
-                        # loop = asyncio.get_running_loop()
-                        # loop.run_in_executor(self.thread_pool, lambda: asyncio.run(self.handle_order_update(msg)))
                         asyncio.create_task(self.handle_order_update(msg, main_order_map))
 
                     # 订单过期
@@ -314,8 +309,6 @@ class OrderManager:
                         order_type = msg['o']['ot']
                         side = msg['o']['S']
                         logger.info(f"EXPIRED-收到主账户订单失效: ID={order_id}, 状态={msg['o']['X']}, 数量={quantity}, 价格={price}, 时间={msg['o']['T']}, 类型={order_type}, 方向={side}")
-                        # loop = asyncio.get_running_loop()
-                        # loop.run_in_executor(self.thread_pool, lambda: asyncio.run(self.handle_order_update(msg)))
                         # todo 更新主账号仓位
                         asyncio.create_task(self.handle_order_update(msg, main_order_map))
                 
@@ -332,8 +325,6 @@ class OrderManager:
                     logger.error(f"处理消息时发生错误: {str(e)}", exc_info=True)
                     continue  # 继续
             # 关闭WebSocket连接
-            # self.main_client.running = False
-            # self.main_client.close_connection()
             logger.info("WebSocket连接已关闭")
 
     def _handle_filled(self, msg, main_order_map):
@@ -414,19 +405,10 @@ class OrderManager:
             order_id = message['o']['i']
             new_status = message['o']['X']
             logger.info(f"订单更新: ID={order_id}, 状态={new_status}")
-            # 在这里添加跟单逻辑
+            
 
             # 根据main_order_map 获取子账号要进行的订单数量， 然后根据数量进行下单。
-            
             await self.follow_order(order_id, new_status, message, main_order_map)
-
-            # 后置操作， 判断main_order_map 中的订单是否已经完全成交，如果完全成交， 则删除main_order_map 中的订单
-            # 检查订单是否完全成交 todo 未完成
-            # if main_order_map[str(order_id)]['order_status'] == 'FILLED':
-            #     # 检查子订单是否完全成交
-            #     if main_order_map[str(order_id)]['sub_filled_quantity'] >= main_order_map[str(order_id)]['sub_orgin_quantity']:
-            #         # 删除主订单
-            #         del main_order_map[str(order_id)]
             # 补偿机制
             order_action = self.get_order_action(message)
             is_close_position = order_action in [OrderAction.CLOSE_LONG, OrderAction.CLOSE_SHORT]
@@ -510,39 +492,17 @@ class OrderManager:
         #订单累计成交量
         mian_order_filled_quantity = float(message['o']['z'])
 
-        # if (status == 'FILLED' or status == 'PARTIALLY_FILLED') and self.sub_client:
-        # if (status == 'FILLED' or status == 'EXPIRED') and self.sub_client:
         if (status == 'FILLED' or status == 'EXPIRED ' ) and self.sub_client:    
             try:
-                
-                # todo 根据订单数量，多次下单，知道订单完全卖出，或者完全买入。
-                # main_order = await self.main_client.futures_get_order(symbol=message['o']['s'], orderId=order_id)
-                # todo 查看副账号账户余额， 如果余额不足， 则不执行
-                # 构建副账户订单参数
-                # sub_order = {
-                #     'symbol':message['o']['s'],
-                #     'side': message['o']['S'],
-                #     'type': message['o']['ot'],
-                #     # l为末次成交量
-                #     'quantity': message['o']['l']
-                # }
-                # 根据主账户订单类型设置副账户订单参数, 如果是限价单，需要设置价格， 暂时不需要
-                # if message['o']['ot'] == 'LIMIT':
-                #     sub_order['price'] = message['o']['p']
-
-                #---------------for debug for todo--------------------------------
                 logger.info(f"开始执行跟单逻辑， 主账户订单ID:{order_id}")
                 
                 # 获取本次需要交易的总数量
                 # 获取本次需要交易的总数量并按照配置的比例计算
-                # total_quantity = float(message['o']['l']) * SUB_ORDER_TRADE_RATIO
                 total_quantity = float(message['o']['z']) * SUB_ORDER_TRADE_RATIO
             
                 # 处理精度，保留与原订单相同的小数位数
-               
                 qty_precision, price_precision = await self.get_symbol_precision(message['o']['s'])
                 total_quantity = round(total_quantity, qty_precision)
-                # total_quantity = float(message['o']['l'])
                 remaining_quantity = total_quantity
                 
                 max_retries = 5  # 最大重试次数
@@ -587,7 +547,6 @@ class OrderManager:
                                         break
 
                                 # 处理精度
-                                # qty_precision, price_precision = await self.get_symbol_precision(symbol)
                                 sub_order['quantity'] =  round(remaining_quantity, qty_precision)
                             except Exception as e:
                                 logger.error(f"获取持仓信息失败: {str(e)}", exc_info=True)
@@ -618,12 +577,6 @@ class OrderManager:
 
                         # 更新副账户持仓量  
                         self._update_position(self.sub_positions, symbol, order_action, filled_quantity)
-
-                        
-                        # if symbol not in self.sub_positions:
-                        #     self.sub_positions[symbol] = {'LONG': 0.0, 'SHORT': 0.0}
-
-                        # self.sub_positions[symbol][position_side] = abs(self.sub_positions[symbol][position_side] - filled_quantity )
                         
                         executed_quantity += filled_quantity
                         remaining_quantity = total_quantity - executed_quantity
@@ -688,13 +641,6 @@ class OrderManager:
                     logger.warning(f"未能完成全部数量的跟单，剩余数量: {remaining_quantity}")
                 else:
                     logger.info(f"跟单完成，总成交数量: {executed_quantity}")
-               
-                #-----------------------------end--------------------------------
-                # 执行副账户交易
-                # response = await self.sub_client.futures_create_order(**sub_order)
-                # logger.info(f"副账户跟单成功 订单ID:{response['orderId']} "
-                #            f"{response['symbol']} {response['side']}@{response['price']}")
-                # logger.info(f"副账户跟单信息: {response}")
             except Exception as e:
                 logger.error(f"跟单失败: {str(e)}", exc_info=True)
             
@@ -802,10 +748,8 @@ class OrderManager:
 
             order_action = None
             if position_side == 'LONG':
-                # remaining_quantity = abs(sub_position) - sub_needed_quantity
                 order_action = OrderAction.CLOSE_LONG
             elif position_side == 'SHORT':
-                # remaining_quantity = abs(sub_position) - sub_needed_quantity
                 order_action = OrderAction.CLOSE_SHORT
             else:
                 logger.error(f"未知的仓位方向: {position_side}")
@@ -864,14 +808,8 @@ class OrderManager:
             })
 
             main_order['sub_filled_quantity'] += filled_quantity
-            # sub_filled_quantity += filled_quantity
-            # remaining_quantity = remaining_quantity - filled_quantity
             still_close_quantity = final_close_quantity - filled_quantity
-            # 更新子账户仓位 非原子性，后期考虑加上异步锁
-            # self.sub_positions[symbol] = sub_position - filled_quantity
-            # self.sub_positions[symbol][position_side] -= filled_quantity
-            # if self.sub_positions[symbol][position_side] < 0:
-            #     self.sub_positions[symbol][position_side] = 0.0
+            # 更新子账户仓位 非原子性，后期考虑加上异步锁。
             logger.info(f"主账户当前持仓数量: {main_position}, 子账户当前持仓： {self.sub_positions[symbol]} 子账户需要平仓的数量: {sub_needed_quantity}, 已平仓数量: {filled_quantity}, 还需平仓数量: {still_close_quantity}")
             
             if still_close_quantity > 0:
