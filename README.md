@@ -54,6 +54,10 @@ python main.py
 4.  新建 Pull Request
 
 
+#### 交流群
+QQ群：1051968388
+
+
 
 
 
